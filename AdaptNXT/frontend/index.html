@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AdaptNXT Simple E-commerce</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    input, button { margin: 5px 0; padding: 8px; width: 100%; max-width: 300px; }
+    .container { max-width: 600px; margin: auto; }
+    .product { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>AdaptNXT Simple E-commerce</h1>
+
+    <div id="auth-section">
+      <h2>Login</h2>
+      <input type="text" id="username" placeholder="Username" />
+      <input type="password" id="password" placeholder="Password" />
+      <button onclick="login()">Login</button>
+      <p id="login-message"></p>
+    </div>
+
+    <div id="products-section" class="hidden">
+      <h2>Products</h2>
+      <div id="products-list"></div>
+      <button onclick="logout()">Logout</button>
+    </div>
+
+    <div id="cart-section" class="hidden">
+      <h2>Your Cart</h2>
+      <div id="cart-list"></div>
+      <button onclick="placeOrder()">Place Order</button>
+    </div>
+
+    <div id="order-section" class="hidden">
+      <h2>Your Orders</h2>
+      <div id="order-list"></div>
+    </div>
+  </div>
+
+  <script>
+    let token = null;
+    let userRole = null;
+
+    async function login() {
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        token = data.token;
+        userRole = data.role;
+        document.getElementById('login-message').textContent = 'Login successful!';
+        document.getElementById('auth-section').classList.add('hidden');
+        document.getElementById('products-section').classList.remove('hidden');
+        document.getElementById('cart-section').classList.remove('hidden');
+        document.getElementById('order-section').classList.remove('hidden');
+        loadProducts();
+        loadCart();
+        loadOrders();
+      } else {
+        document.getElementById('login-message').textContent = data.message || 'Login failed';
+      }
+    }
+
+    async function logout() {
+      token = null;
+      userRole = null;
+      document.getElementById('auth-section').classList.remove('hidden');
+      document.getElementById('products-section').classList.add('hidden');
+      document.getElementById('cart-section').classList.add('hidden');
+      document.getElementById('order-section').classList.add('hidden');
+      document.getElementById('login-message').textContent = '';
+    }
+
+    async function loadProducts() {
+      const res = await fetch('/api/products');
+      const data = await res.json();
+      const productsList = document.getElementById('products-list');
+      productsList.innerHTML = '';
+      data.products.forEach(product => {
+        const div = document.createElement('div');
+        div.className = 'product';
+        div.innerHTML = `
+          <h3>${product.name}</h3>
+          <p>${product.description || ''}</p>
+          <p>Category: ${product.category || 'N/A'}</p>
+          <p>Price: $${product.price.toFixed(2)}</p>
+          <p>Stock: ${product.stock}</p>
+          <input type="number" id="qty-${product._id}" min="1" max="${product.stock}" value="1" />
+          <button onclick="addToCart('${product._id}')">Add to Cart</button>
+        `;
+        productsList.appendChild(div);
+      });
+    }
+
+    async function addToCart(productId) {
+      const qtyInput = document.getElementById('qty-' + productId);
+      const quantity = parseInt(qtyInput.value);
+      if (!quantity || quantity < 1) {
+        alert('Please enter a valid quantity');
+        return;
+      }
+      const res = await fetch('/api/cart', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token,
+        },
+        body: JSON.stringify({ productId, quantity }),
+      });
+      if (res.ok) {
+        alert('Added to cart');
+        loadCart();
+      } else {
+        alert('Failed to add to cart');
+      }
+    }
+
+    async function loadCart() {
+      const res = await fetch('/api/cart', {
+        headers: { 'Authorization': 'Bearer ' + token },
+      });
+      const data = await res.json();
+      const cartList = document.getElementById('cart-list');
+      cartList.innerHTML = '';
+      if (!data.items || data.items.length === 0) {
+        cartList.textContent = 'Your cart is empty';
+        return;
+      }
+      data.items.forEach(item => {
+        const div = document.createElement('div');
+        div.innerHTML = `
+          <p>${item.product.name} - Quantity: ${item.quantity} 
+          <button onclick="removeFromCart('${item.product._id}')">Remove</button></p>
+        `;
+        cartList.appendChild(div);
+      });
+    }
+
+    async function removeFromCart(productId) {
+      const res = await fetch('/api/cart/' + productId, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + token },
+      });
+      if (res.ok) {
+        alert('Removed from cart');
+        loadCart();
+      } else {
+        alert('Failed to remove from cart');
+      }
+    }
+
+    async function placeOrder() {
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+      });
+      if (res.ok) {
+        alert('Order placed successfully');
+        loadCart();
+        loadOrders();
+      } else {
+        alert('Failed to place order');
+      }
+    }
+
+    async function loadOrders() {
+      const res = await fetch('/api/orders', {
+        headers: { 'Authorization': 'Bearer ' + token },
+      });
+      const data = await res.json();
+      const orderList = document.getElementById('order-list');
+      orderList.innerHTML = '';
+      if (!data || data.length === 0) {
+        orderList.textContent = 'No orders found';
+        return;
+      }
+      data.forEach(order => {
+        const div = document.createElement('div');
+        div.innerHTML = `
+          <p>Order ID: ${order._id} - Total: $${order.totalAmount.toFixed(2)} - Status: ${order.status}</p>
+        `;
+        orderList.appendChild(div);
+      });
+    }
+  </script>
+</body>
+</html>

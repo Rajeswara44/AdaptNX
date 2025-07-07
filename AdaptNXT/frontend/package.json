@@ -1,0 +1,11 @@
+{
+  "name": "adaptnxt-frontend",
+  "version": "1.0.0",
+  "description": "Static frontend for AdaptNXT simple e-commerce API",
+  "scripts": {
+    "start": "http-server -p 3000"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
